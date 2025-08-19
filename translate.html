@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voice Translation</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
+    .tabs { margin-bottom: 20px; }
+    button { padding: 10px 20px; margin: 5px; border: none; border-radius: 6px; background: #28a745; color: white; cursor: pointer; }
+    button:hover { background: #1e7e34; }
+    form { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    #translateResult { margin-top: 20px; }
+
+    /* Spinner styles */
+    #spinner {
+      display: none;
+      margin-top: 20px;
+      text-align: center;
+    }
+    .loader {
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #28a745;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <h1>Voice Translation</h1>
+
+  <div class="tabs">
+    <button onclick="window.location.href='/'">Clone Voice</button>
+    <button onclick="window.location.href='/translate'">Voice Translate</button>
+  </div>
+
+  <form id="translateForm" enctype="multipart/form-data" method="POST" action="/voice_translate">
+    <label>Input Voice (Kannada):</label><br><br>
+
+    <!-- Hidden input used for both manual upload & recording -->
+    <input type="file" id="voiceInput" name="voice_input" accept="audio/*" required style="display:none;">
+    <button type="button" onclick="document.getElementById('voiceInput').click()">📂 Choose File</button>
+    <button type="button" id="recordBtn" onclick="startRecording('recordBtn','voiceInput')">🎙️ Record</button>
+    <button type="button" onclick="stopRecording('recordBtn','voiceInput')">⏹️ Stop</button>
+
+    <br><br>
+    <label>Target Language:</label>
+    <select name="language" required>
+      <option value="en">English</option>
+      <option value="hi">Hindi</option>
+      <option value="fr">French</option>
+      <option value="de">German</option>
+    </select><br><br>
+
+    <button type="submit">Translate & Generate Voice</button>
+  </form>
+
+  <!-- Spinner -->
+  <div id="spinner">
+    <div class="loader"></div>
+    <p>Processing... Please wait</p>
+  </div>
+
+  <div id="translateResult">
+    <h3>Results:</h3>
+    <p><b>Recognized:</b> <span id="recognized"></span></p>
+    <p><b>Translated:</b> <span id="translated"></span></p>
+    <audio id="translatedAudio" controls></audio>
+  </div>
+
+  <script>
+    let mediaRecorder, audioChunks = [];
+
+    async function startRecording(btnId, hiddenInputId) {
+      let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.start();
+      document.getElementById(btnId).innerText = "Recording...";
+    }
+
+    function stopRecording(btnId, hiddenInputId) {
+      mediaRecorder.stop();
+      mediaRecorder.onstop = () => {
+        let audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+        let file = new File([audioBlob], "recorded.wav");
+        let dt = new DataTransfer();
+        dt.items.add(file);
+        document.getElementById(hiddenInputId).files = dt.files;
+        document.getElementById(btnId).innerText = "Recorded ✅";
+      };
+    }
+
+    document.getElementById("translateForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      document.getElementById("spinner").style.display = "block"; // show spinner
+      const formData = new FormData(e.target);
+      const res = await fetch("/voice_translate", { method: "POST", body: formData });
+      document.getElementById("spinner").style.display = "none"; // hide spinner
+
+      if (res.ok) {
+        const data = await res.json();
+        document.getElementById("recognized").innerText = data.recognized_text;
+        document.getElementById("translated").innerText = data.translated_text;
+        if (data.audio_file) {
+          document.getElementById("translatedAudio").src = "/static/" + data.audio_file;
+        }
+      }
+    });
+  </script>
+</body>
+</html>

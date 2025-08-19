@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Voice Cloning</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 40px; background: #f7f7f7; }
+    .tabs { margin-bottom: 20px; }
+    button { padding: 10px 20px; margin: 5px; border: none; border-radius: 6px; background: #007bff; color: white; cursor: pointer; }
+    button:hover { background: #0056b3; }
+    form { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+    textarea { width: 100%; height: 80px; margin-top: 10px; }
+    #cloneResult { margin-top: 20px; }
+    /* Spinner */
+    #spinner { display: none; margin-top: 15px; }
+    .loader {
+      border: 6px solid #f3f3f3;
+      border-top: 6px solid #007bff;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+      margin: auto;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <h1>Voice Cloning</h1>
+
+  <div class="tabs">
+    <button onclick="window.location.href='/'">Clone Voice</button>
+    <button onclick="window.location.href='/translate'">Voice Translate</button>
+  </div>
+
+  <form id="cloneForm" enctype="multipart/form-data" method="POST">
+    <label>Reference Voice:</label>
+    <input type="file" id="refVoiceFile" name="ref_voice" accept="audio/*"><br><br>
+
+    <button type="button" id="recordBtn" onclick="startRecording()">🎙️ Record</button>
+    <button type="button" onclick="stopRecording()">⏹️ Stop</button>
+    <br><br>
+
+    <label>Text:</label>
+    <textarea name="text" required></textarea><br>
+
+    <button type="submit">Generate</button>
+  </form>
+
+  <!-- Spinner -->
+  <div id="spinner">
+    <div class="loader"></div>
+    <p>Processing... Please wait</p>
+  </div>
+
+  <div id="cloneResult">
+    <h3>Output:</h3>
+    <audio id="cloneAudio" controls></audio>
+  </div>
+
+  <script>
+    let mediaRecorder, audioChunks = [];
+
+    async function startRecording() {
+      let stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaRecorder = new MediaRecorder(stream);
+      audioChunks = [];
+      mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+      mediaRecorder.start();
+      document.getElementById("recordBtn").innerText = "Recording...";
+    }
+
+    function stopRecording() {
+      mediaRecorder.stop();
+      mediaRecorder.onstop = () => {
+        let audioBlob = new Blob(audioChunks, { type: "audio/wav" });
+        let file = new File([audioBlob], "recorded.wav", { type: "audio/wav" });
+        let dt = new DataTransfer();
+        dt.items.add(file);
+        document.getElementById("refVoiceFile").files = dt.files;
+        document.getElementById("recordBtn").innerText = "Recorded ✅";
+      };
+    }
+
+    document.getElementById("cloneForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+      const formData = new FormData(e.target);
+
+      // Show spinner
+      document.getElementById("spinner").style.display = "block";
+
+      try {
+        const res = await fetch("/clone", { method: "POST", body: formData });
+        const data = await res.json();
+
+        document.getElementById("cloneAudio").src = "/static/" + data.audio_file;
+      } catch (err) {
+        alert("Error generating voice!");
+      } finally {
+        // Hide spinner
+        document.getElementById("spinner").style.display = "none";
+      }
+    });
+  </script>
+</body>
+</html>
